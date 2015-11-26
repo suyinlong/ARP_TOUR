@@ -1,7 +1,7 @@
 /*
 * @File:    tour.c
 * @Date:    2015-11-25 16:33:23
-* @Last Modified time: 2015-11-26 12:14:29
+* @Last Modified time: 2015-11-26 12:29:56
 * @Description:
 *     Tour application basic functions
 *     - void StartTour(tour_object *obj)
@@ -234,7 +234,7 @@ void ParseArguments(int argc, char **argv, tour_object *obj) {
  *  @param  : tour_object   *obj    [tour object]
  *  @return : void
  *
- *  Create two IP raw sockets, one PF_PACKET socket and one UDP socket
+ *  Create two IP raw sockets, one PF_PACKET socket and two UDP socket
  * --------------------------------------------------------------------------
  */
 void CreateSockets(tour_object *obj) {
@@ -253,8 +253,10 @@ void CreateSockets(tour_object *obj) {
     // msSocket: UDP socket
     //           used for sending multicast datagram
     //   option: SO_REUSEADDR
+    //   option: IP_TTL = 1
     obj->msSockfd = Socket(AF_INET, SOCK_DGRAM, 0);
     Setsockopt(obj->msSockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    Setsockopt(obj->msSockfd, IPPROTO_IP, IP_TTL, &on, sizeof(on));
 
     // mrSocket: UDP socket
     //           used for receiving multicast datagram
