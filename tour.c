@@ -1,9 +1,11 @@
 /*
 * @File:    tour.c
 * @Date:    2015-11-25 16:33:23
-* @Last Modified time: 2015-11-26 12:29:56
+* @Last Modified time: 2015-12-03 11:22:22
 * @Description:
 *     Tour application basic functions
+*     - int IsVisitedPrecedingNode(tourhdr *rthdr, uchar *data)
+*         [Check if the preceding node has been pinged by local node before]
 *     - void StartTour(tour_object *obj)
 *         [Start route traversal]
 *     - void ProcessTour(tour_object *obj)
@@ -21,6 +23,33 @@
 */
 
 #include "tour.h"
+
+
+/* --------------------------------------------------------------------------
+ *  IsVisitedPrecedingNode
+ *
+ *  Check if the preceding node has been pinged by local node before
+ *
+ *  @param  : tourhdr   *rthdr  [tour header]
+ *            uchar     *data   [tour payload]
+ *  @return : int       [0 = no, 1 = yes]
+ *
+ *  local index = current index - 1
+ *  prev index = current index - 2
+ *  find match pair in the previous list
+ * --------------------------------------------------------------------------
+ */
+int IsVisitedPrecedingNode(tourhdr *rthdr, uchar *data) {
+    int i, local, prev;
+    local = rthdr->index - 1;
+    prev = rthdr->index - 2;
+    for (i = 1; i < rthdr->index - 1; i++) {
+        if (strncmp(IP_SEQ(data, i), IP_SEQ(data, local), IPADDR_BUFFSIZE) == 0
+            && strncmp(IP_SEQ(data, i-1), IP_SEQ(data, prev), IPADDR_BUFFSIZE) == 0)
+            return 1;
+    }
+    return 0;
+}
 
 /* --------------------------------------------------------------------------
  *  StartTour
@@ -69,7 +98,7 @@ void StartTour(tour_object *obj) {
 
     UtilTime(timeString);
     UtilIpToHostname((uchar *)&iphdr->ip_dst, nodeTo);
-    printf("<%s> sending routing packet to <%s> %d of %d\n", timeString, nodeTo, rthdr->index + 1, rthdr->seqLength);
+    printf("[TOU] <%s> sending routing packet to <%s> %d of %d\n", timeString, nodeTo, rthdr->index + 1, rthdr->seqLength);
     // send to the next node
     Sendto(obj->rtSockfd, packet, length, 0, (struct sockaddr *) &sin, sizeof(struct sockaddr));
 
@@ -95,7 +124,8 @@ void StartTour(tour_object *obj) {
  */
 void ProcessTour(tour_object *obj) {
     char timeString[TIMESTR_BUFFSIZE], nodeFrom[HOSTNAME_BUFFSIZE], nodeTo[HOSTNAME_BUFFSIZE];
-    struct sockaddr_in sin;
+    struct sockaddr_in sin, preceding;
+    struct hwaddr HWaddr;
     uchar pktBuff[PACKET_BUFFSIZE];
     struct ip *iphdr = (struct ip *) pktBuff;
     tourhdr *rthdr = (tourhdr *) (pktBuff + IP4_HDRLEN);
@@ -109,7 +139,7 @@ void ProcessTour(tour_object *obj) {
 
     UtilTime(timeString);
     UtilIpToHostname((uchar *)&iphdr->ip_src, nodeFrom);
-    printf("<%s> received routing packet from <%s>\n", timeString, nodeFrom);
+    printf("[TOU] <%s> received routing packet from <%s>\n", timeString, nodeFrom);
 
     // check if already in the multicast group
     if (obj->mcastPort != rthdr->port)
@@ -127,11 +157,26 @@ void ProcessTour(tour_object *obj) {
         sin.sin_addr.s_addr = iphdr->ip_dst.s_addr;
 
         UtilIpToHostname((uchar *)&iphdr->ip_dst, nodeTo);
-        printf("<%s> sending routing packet to <%s> %d of %d\n", timeString, nodeTo, rthdr->index + 1, rthdr->seqLength);
+        printf("[TOU] <%s> sending routing packet to <%s> %d of %d\n", timeString, nodeTo, rthdr->index + 1, rthdr->seqLength);
         // send to the next node
         Sendto(obj->rtSockfd, pktBuff, ntohs(iphdr->ip_len), 0, (struct sockaddr *) &sin, sizeof(struct sockaddr));
+
+        // check if preceding node has been visited in the same order
+        if (IsVisitedPrecedingNode(rthdr, data) == 0) {
+            printf("[TOU] New preceding node.\n");
+            bzero(&preceding, sizeof(struct sockaddr_in));
+            sin.sin_family = AF_INET;
+            memcpy((void *)&preceding.sin_addr, IP_SEQ(data, rthdr->index - 2), IPADDR_BUFFSIZE);
+
+            bzero(&HWaddr, sizeof(struct hwaddr));
+            areq((struct sockaddr *) &preceding, sizeof(preceding), &HWaddr);
+            // TODO: PING
+
+        } else {
+            printf("[TOU] Preceding node has been pinged before.\n");
+        }
     } else {
-        printf("<%s> routing packet reached the last node.\n", timeString);
+        printf("[TOU] <%s> routing packet reached the last node.\n", timeString);
         // TODO: mcast start need to wait for a few seconds
         StartMulticast(obj, rthdr->grp, rthdr->port);
     }
@@ -150,7 +195,7 @@ void ProcessTour(tour_object *obj) {
  * --------------------------------------------------------------------------
  */
 void FinishTour(tour_object *obj) {
-    printf("<%s> tour has ended.\n", obj->hostname);
+    printf("[TOU] <%s> tour has ended.\n", obj->hostname);
 
     obj->seqLength = 0;
     if (obj->nodeSeq)
@@ -159,8 +204,7 @@ void FinishTour(tour_object *obj) {
         free(obj->ipSeq);
     obj->nodeSeq = NULL;
     obj->ipSeq = NULL;
-    bzero(obj->mcastAddr, IPADDR_BUFFSIZE);
-    obj->mcastPort = 0;
+    LeaveMulticastGroup(obj, obj->mcastAddr, obj->mcastPort);
 }
 
 /* --------------------------------------------------------------------------
@@ -208,7 +252,7 @@ void ParseArguments(int argc, char **argv, tour_object *obj) {
     }
 
     if (j == 1) {
-        printf("Tour module received an invalid node sequence after simplification (point to itself solely).\n");
+        printf("[TOU] Received an invalid node sequence after simplification (point to itself solely).\n");
         obj->seqLength = 0;
         free(obj->nodeSeq);
         free(obj->ipSeq);
@@ -221,7 +265,7 @@ void ParseArguments(int argc, char **argv, tour_object *obj) {
         obj->ipSeq = realloc(obj->ipSeq, obj->seqLength * IPADDR_BUFFSIZE);
     }
 
-    printf("Tour module received node sequence(%d) from command line arguments:\n", obj->seqLength);
+    printf("[TOU] Received node sequence(%d) from command line arguments:\n", obj->seqLength);
     for (i = 0; i < obj->seqLength; i++)
         printf("%*s - %-*s%s\n", HOSTNAME_BUFFSIZE, NODE_SEQ(obj->nodeSeq, i), IPSTR_BUFFSIZE, UtilIpToString(IP_SEQ(obj->ipSeq, i)), (i == 0) ? " * source" : "");
 }
@@ -325,7 +369,7 @@ int main(int argc, char **argv) {
     UtilHostname(obj.hostname);
     UtilHostnameToIp(obj.hostname, obj.ipaddr);
 
-    printf("Tour module started on %s (%s).\n", obj.hostname, UtilIpToString(obj.ipaddr));
+    printf("[TOU] module started on %s (%s).\n", obj.hostname, UtilIpToString(obj.ipaddr));
 
     // parse arguments to tour sequence
     ParseArguments(argc, argv, &obj);

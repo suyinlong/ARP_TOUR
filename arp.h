@@ -16,6 +16,8 @@
 #define ARP_REQ             1
 #define ARP_REP             2
 
+#define AREQ_TIMEOUT        3
+
 #define IP_ALEN     4
 #define ETH_ALEN    6
 

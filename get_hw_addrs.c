@@ -1,13 +1,11 @@
 /*
 * @File: get_hw_addrs.c
 * @Date: 2015-11-11 10:04:27
-* @Last Modified time: 2015-12-02 21:04:44
+* @Last Modified time: 2015-12-03 09:28:24
 * @Description:
-*     - odr_itable *get_hw_addrs(char *obj_ipaddr)
-*         [Get the hardware address on all interfaces]
-*     + void free_hwa_info(odr_itable *hwahead)
-*         [Free the memory space of odr_itable]
-*     + odr_itable *Get_hw_addrs(char *obj_ipaddr)
+*     - struct hwa_info *get_hw_addrs()
+*         [Get the hardware address on interface eth0]
+*     + struct hwa_info *Get_hw_addrs()
 *         [Wrapper function of get_hw_addrs()]
 */
 
@@ -18,12 +16,11 @@
  *
  *  Get interfaces information
  *
- *  @param  : char  *obj_ipaddr [point to the primary IP address of node]
- *  @return : odr_itable *      [head of interface table]
+ *  @param  : void
+ *  @return : struct hwa_info * [head of interface table]
  *
- *  Use ioctl() to get all interfaces information, ignoring lo and eth0.
- *  Get the node's primary IP address from interface eth0
- *  Build the information of interfaces into odr_itable
+ *  Use ioctl() to get interface information, just focus on eth0.
+ *  Build the information of interfaces into hwa_info
  * --------------------------------------------------------------------------
  */
 struct hwa_info *get_hw_addrs() {
@@ -99,34 +96,12 @@ struct hwa_info *get_hw_addrs() {
 }
 
 /* --------------------------------------------------------------------------
- *  free_hwa_info
- *
- *  odr_itable free function
- *
- *  @param  : odr_itable    *hwahead    [head of interface table]
- *  @return : void
- *
- *  Free the memory space of interface table
- * --------------------------------------------------------------------------
- */
-void free_hwa_info(struct hwa_info *hwahead) {
-    struct hwa_info *hwa, *hwanext;
-
-    for (hwa = hwahead; hwa != NULL; hwa = hwanext) {
-        free(hwa->ip_addr);
-        hwanext = hwa->hwa_next;  /* can't fetch hwa_next after free() */
-        free(hwa);      /* the hwa_info{} itself */
-    }
-}
-/* end free_hwa_info */
-
-/* --------------------------------------------------------------------------
  *  Get_hw_addrs
  *
  *  Wrapper function of get_hw_addrs()
  *
- *  @param  : char  *obj_ipaddr [point to the primary IP address of node]
- *  @return : odr_itable *      [head of interface table]
+ *  @param  : void
+ *  @return : struct hwa_info * [head of interface table]
  *
  *  Call get_hw_addrs()
  *  Quit if error

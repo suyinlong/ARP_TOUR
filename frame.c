@@ -1,37 +1,33 @@
 /*
 * @File: frame.c
 * @Date: 2015-11-10 22:45:45
-* @Last Modified time: 2015-12-02 22:49:21
+* @Last Modified time: 2015-12-03 09:08:12
 * @Description:
 *     Frame functions, provides frame builder and frame send/recv function
-*     - void build_frame_header(char *frame, uchar *dst_mac, uchar *src_mac, ushort ftype)
-*         [Frame header builder]
-*     + void build_frame(odr_frame *frame, uchar *dst_mac, uchar *src_mac, ushort ftype, void *data)
+*     + void BuildFrame(ethhdr *frame, uchar *dst_mac, uchar *src_mac, ushort proto)
 *         [Frame builder]
-*     + void build_bcast_frame(odr_frame *frame, uchar *src_mac, ushort ftype, void *data)
+*     + void BuildBcastFrame(ethhdr *frame, uchar *src_mac, ushort proto)
 *         [Broadcast frame builder]
-*     + int send_frame(int sockfd, int if_index, odr_frame *frame, uchar pkttype)
+*     + int SendFrame(int sockfd, int if_index, void *frame, int framelen, uchar pkttype)
 *         [Frame send function]
-*     + int recv_frame(int sockfd, odr_frame *frame, struct sockaddr *from, socklen_t *fromlen)
+*     + int RecvFrame(int sockfd, void *frame, int framelen, struct sockaddr *from, socklen_t *fromlen)
 *         [Frame receive function]
 */
 
 #include "arp.h"
 
 /* --------------------------------------------------------------------------
- *  build_frame
+ *  BuildFrame
  *
  *  Frame builder
  *
- *  @param  : odr_frame     *frame      [frame]
- *            uchar         *dst_mac    [Destination MAC address]
- *            uchar         *src_mac    [Source MAC address]
- *            ushort        ftype       [frame type]
- *            void          *data       [payload of frame]
+ *  @param  : ethhdr        *frame      [frame header]
+ *            uchar         *dst_mac    [destination MAC address]
+ *            uchar         *src_mac    [source MAC address]
+ *            ushort        proto       [frame protocol]
  *  @return : void
- *  @see    : function#build_frame_header
  *
- *  Build the frame. Call before send_frame()
+ *  Build the frame header. Call before send_frame()
  * --------------------------------------------------------------------------
  */
 void BuildFrame(ethhdr *frame, uchar *dst_mac, uchar *src_mac, ushort proto) {
@@ -42,16 +38,14 @@ void BuildFrame(ethhdr *frame, uchar *dst_mac, uchar *src_mac, ushort proto) {
 }
 
 /* --------------------------------------------------------------------------
- *  build_bcast_frame
+ *  BuildBcastFrame
  *
  *  Broadcast frame builder
  *
- *  @param  : odr_frame     *frame      [frame]
- *            uchar         *src_mac    [Source MAC address]
- *            ushort        ftype       [frame type]
- *            void          *data       [payload of frame]
+ *  @param  : ethhdr        *frame      [frame header]
+ *            uchar         *src_mac    [source MAC address]
+ *            ushort        proto       [frame protocol]
  *  @return : void
- *  @see    : function#build_frame
  *
  *  Build the broadcast frame. The destination MAC address is defined as
  *  ff:ff:ff:ff:ff:ff
@@ -63,13 +57,14 @@ void BuildBcastFrame(ethhdr *frame, uchar *src_mac, ushort proto) {
 }
 
 /* --------------------------------------------------------------------------
- *  send_frame
+ *  SendFrame
  *
  *  Frame send function
  *
  *  @param  : int           sockfd      [socket file descriptor]
  *            int           if_index    [interface index]
- *            odr_frame     *frame      [frame]
+ *            void          *frame      [frame]
+ *            int           framelen    [frame length]
  *            uchar         pkttype     [packet type]
  *  @return : int   [the number of bytes that are sent, -1 if failed]
  *
@@ -77,7 +72,7 @@ void BuildBcastFrame(ethhdr *frame, uchar *src_mac, ushort proto) {
  *  socket
  * --------------------------------------------------------------------------
  */
-int SendFrame(int sockfd, int if_index, char *frame, int framelen, uchar pkttype) {
+int SendFrame(int sockfd, int if_index, void *frame, int framelen, uchar pkttype) {
     int i;
     struct sockaddr_ll socket_address;
     ethhdr *eth = (ethhdr *) frame;
@@ -101,12 +96,13 @@ int SendFrame(int sockfd, int if_index, char *frame, int framelen, uchar pkttype
 }
 
 /* --------------------------------------------------------------------------
- *  recv_frame
+ *  RecvFrame
  *
  *  Frame receive function
  *
  *  @param  : int               sockfd      [socket file descriptor]
- *            odr_frame         *frame      [frame]
+ *            void              *frame      [frame]
+ *            int               framelen    [frame length]
  *            struct sockaddr   *from       [store sender address]
  *            socklent_t        *fromlen    [length of structure]
  *  @return : int   [the number of bytes that are received, -1 if failed]
@@ -114,6 +110,6 @@ int SendFrame(int sockfd, int if_index, char *frame, int framelen, uchar pkttype
  *  Receive the frame and the sender information
  * --------------------------------------------------------------------------
  */
-int RecvFrame(int sockfd, char *frame, int framelen, struct sockaddr *from, socklen_t *fromlen) {
+int RecvFrame(int sockfd, void *frame, int framelen, struct sockaddr *from, socklen_t *fromlen) {
     return recvfrom(sockfd, frame, framelen, 0, from, fromlen);
 }

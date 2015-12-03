@@ -16,6 +16,9 @@
 #define ARP_PROTOCOL_ID     14508
 #define ARP_ID_CODE         61375
 
+#define MCAST_ADDRESS       {0xee, 0x5c, 0x53, 0x12}
+#define MCAST_PORT          7518
+
 #define IPADDR_BUFFSIZE     4
 #define HWADDR_BUFFSIZE     6
 #define HOSTNAME_BUFFSIZE   10
@@ -62,6 +65,12 @@ typedef struct tour_object_t {
     int     mcastPort;                      /* Multicast port #     */
 } tour_object;
 
+struct hwaddr {
+    int     sll_ifindex;    /* Interface number         */
+    ushort  sll_hatype;     /* Hardware type            */
+    uchar   sll_halen;      /* Length of address        */
+    uchar   sll_addr[8];    /* Physical layer address   */
+};
 
 char *UtilIpToString(const uchar *);
 

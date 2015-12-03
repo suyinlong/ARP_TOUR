@@ -1,13 +1,32 @@
 /*
 * @File:    areq.c
 * @Date:    2015-12-02 23:29:25
-* @Last Modified time: 2015-12-03 00:52:07
+* @Last Modified time: 2015-12-03 11:02:36
+* @Description:
+*     ARP API function
+*     + int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr)
+*         [ARP API function]
 */
 
 #include "arp.h"
 
+/* --------------------------------------------------------------------------
+ *  areq
+ *
+ *  ARP API function
+ *
+ *  @param  : struct sockaddr   *IPaddr         [IP address structure]
+ *            socklen_t         sockaddrlen     [address structure length]
+ *            struct hwaddr     *HWaddr         [Hardware address structure]
+ *  @return : int               [The number of bytes read, -1 if failed]
+ *
+ *  Create a domain socket to write IP address request to ARP service
+ *  Wait for the response (3 seconds)
+ *  Write the response to HWaddr
+ * --------------------------------------------------------------------------
+ */
 int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) {
-    int sockfd, r;
+    int sockfd, r, i;
     uchar *ipaddr = ((uchar *)IPaddr) + 4;
     struct sockaddr_un areqaddr, arpaddr;
 
@@ -29,6 +48,8 @@ int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) 
     Bind(sockfd, (SA *)&areqaddr, sizeof(areqaddr));
     Connect(sockfd, (SA *)&arpaddr, sizeof(arpaddr));
 
+    printf("[API] AREQ \"%s\" to local ARP service...\n", UtilIpToString(ipaddr));
+    // Write the IP address to ARP service
     Write(sockfd, ipaddr, IP_ALEN);
 
     fd_set rset;
@@ -36,16 +57,29 @@ int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) 
     FD_SET(sockfd, &rset);
     // Timeout = 3s
     struct timeval timeout;
-    timeout.tv_sec  = 3;
+    timeout.tv_sec  = AREQ_TIMEOUT;
     timeout.tv_usec = 0;
 
+    // monitor the socket, timeout = 3s
     r = select(sockfd+1, &rset, NULL, NULL, &timeout);
 
-    if (r <= 0)
+    // error or timeout, return -1
+    if (r <= 0) {
+        printf("[API] AREQ timeout.\n");
         return -1;
+    }
 
-    return Read(sockfd, HWaddr, sizeof(struct hwaddr));
+    r = Read(sockfd, HWaddr, sizeof(struct hwaddr));
+
+    printf("[API] AREQ \"%s\" received: ", UtilIpToString(ipaddr));
+    printf("<%d, %d, %d, ", HWaddr->sll_ifindex, HWaddr->sll_hatype, HWaddr->sll_halen);
+    for (i = 0; i < 6; i++)
+        printf("%.2x%s", HWaddr->sll_addr[i], (i < 5) ? ":" : ">\n");
 }
+
+/*
+
+// temp test main(), will be deletetd
 
 int main(int argc, char **argv) {
     struct sockaddr_in addr;
@@ -73,3 +107,4 @@ int main(int argc, char **argv) {
 
     return 0;
 }
+*/
