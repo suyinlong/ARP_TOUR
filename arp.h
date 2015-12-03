@@ -11,8 +11,10 @@
 #include <linux/if_arp.h>
 #include "unp.h"
 
-#define ARP_PROTOCOL_ID     14508
-#define ARP_ID_CODE         61375
+#define ARP_PROTOCOL_ID     61173
+#define ARP_ID_CODE         14508
+#define ARP_REQ             1
+#define ARP_REP             2
 
 #define IP_ALEN     4
 #define ETH_ALEN    6
@@ -22,14 +24,31 @@
 
 #define ARP_FRAME_LEN   44
 
-#define ARP_PATH    "/tmp/14508-61375-arpService"
-#define TMP_PATH    "/tmp/14508-61375-tourApplication-XXXXXX"
+#define ARP_PATH    "/tmp/14508-61173-arpService"
+#define TMP_PATH    "/tmp/14508-61173-tourApplication-XXXXXX"
+
+#define IF_NAME             16
+#define IF_HADDR            6
+#define IP_ALIAS            1
 
 typedef unsigned char   BITFIELD8;
 typedef unsigned char   uchar;
 typedef unsigned short  ushort;
 typedef unsigned int    uint;
 typedef unsigned long   ulong;
+
+// Interface table entry
+// Modified hardware address information
+//   * interface: eth0
+struct hwa_info {
+    char    if_name[IF_NAME];       /* interface name, null terminated      */
+    uchar   if_haddr[IF_HADDR];     /* hardware address                     */
+    int     if_index;               /* interface index                      */
+    short   ip_alias;               /* 1 if hwa_addr is an alias IP address */
+    //struct  sockaddr  *ip_addr;     /* IP address                           */
+    uchar   ip_addr[IP_ALEN];       /* IP address                           */
+    struct  hwa_info  *hwa_next;    /* next of these structures             */
+};
 
 typedef struct ethhdr_t {
     uchar   h_dest[ETH_ALEN];       /* destination eth addr */
@@ -63,9 +82,10 @@ typedef struct arp_cache_t {
 } arp_cache;
 
 typedef struct arp_object_t {
-    // struct hwaddrs;
+    struct hwa_info *hwa_info;
     int         pfSockfd;   /* PF_PACKET socket     */
     int         doSockfd;   /* UNIX Domain socket   */
+    int         if_index;   /* Main interface idnex */
     arp_cache   *cache;     /* ARP Cache            */
 } arp_object;
 
@@ -75,5 +95,8 @@ struct hwaddr {
     uchar   sll_halen;      /* Length of address        */
     uchar   sll_addr[8];    /* Physical layer address   */
 };
+
+struct hwa_info *Get_hw_addrs();
+char *UtilIpToString(const uchar *);
 
 #endif
