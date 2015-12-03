@@ -1,7 +1,7 @@
 /*
 * @File:    arp.c
 * @Date:    2015-11-30 16:53:29
-* @Last Modified time: 2015-12-03 00:30:44
+* @Last Modified time: 2015-12-03 00:57:53
 */
 
 #include "arp.h"
@@ -301,17 +301,26 @@ void CreateSockets(arp_object *obj) {
  * --------------------------------------------------------------------------
  */
 void ProcessSockets(arp_object *obj) {
-    int maxfdp1 = max(obj->pfSockfd, obj->doSockfd) + 1;
-    int r;
+    int r, maxfd;
     fd_set rset;
+    arp_cache *entry, *prev;
 
     FD_ZERO(&rset);
     while (1) {
         FD_SET(obj->pfSockfd, &rset);
         FD_SET(obj->doSockfd, &rset);
+        maxfd = max(obj->pfSockfd, obj->doSockfd);
+        entry = obj->cache;
+        while (entry) {
+            if (entry->sockfd > 0) {
+                FD_SET(entry->sockfd, &rset);
+                maxfd = max(maxfd, entry->sockfd);
+            }
+            entry = entry->next;
+        }
 
-        r = Select(maxfdp1, &rset, NULL, NULL, NULL);
-        //printf("Select return\n");
+        r = Select(maxfd + 1, &rset, NULL, NULL, NULL);
+
         if (FD_ISSET(obj->pfSockfd, &rset)) {
             // from PF_PACKET Socket
             ProcessFrame(obj);
@@ -320,6 +329,25 @@ void ProcessSockets(arp_object *obj) {
         if (FD_ISSET(obj->doSockfd, &rset)) {
             // from Domain Socket
             ProcessDomainStream(obj);
+        }
+
+checkagain:
+        prev = NULL;
+        entry = obj->cache;
+        while (entry) {
+            if (entry->sockfd > 0 && FD_ISSET(entry->sockfd, &rset)) {
+                if (prev) {
+                    prev->next = entry->next;
+                    free(entry);
+                } else {
+                    obj->cache = entry->next;
+                    free(entry);
+                }
+                printf("[ARP] Socket connection terminated. Incomplete entry has been removed.\n");
+                goto checkagain;
+            }
+            prev = entry;
+            entry = entry->next;
         }
     }
 }

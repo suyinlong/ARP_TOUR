@@ -1,15 +1,14 @@
 /*
 * @File:    areq.c
 * @Date:    2015-12-02 23:29:25
-* @Last Modified time: 2015-12-02 23:51:20
+* @Last Modified time: 2015-12-03 00:52:07
 */
 
 #include "arp.h"
 
 int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) {
-    int sockfd;
+    int sockfd, r;
     uchar *ipaddr = ((uchar *)IPaddr) + 4;
-
     struct sockaddr_un areqaddr, arpaddr;
 
     bzero(&areqaddr, sizeof(areqaddr));
@@ -32,7 +31,20 @@ int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) 
 
     Write(sockfd, ipaddr, IP_ALEN);
 
-    Read(sockfd, HWaddr, sizeof(struct hwaddr));
+    fd_set rset;
+    FD_ZERO(&rset);
+    FD_SET(sockfd, &rset);
+    // Timeout = 3s
+    struct timeval timeout;
+    timeout.tv_sec  = 3;
+    timeout.tv_usec = 0;
+
+    r = select(sockfd+1, &rset, NULL, NULL, &timeout);
+
+    if (r <= 0)
+        return -1;
+
+    return Read(sockfd, HWaddr, sizeof(struct hwaddr));
 }
 
 int main(int argc, char **argv) {
@@ -47,7 +59,12 @@ int main(int argc, char **argv) {
 
     struct hwaddr HWaddr;
 
-    areq((struct sockaddr *) &addr, sizeof(addr), &HWaddr);
+    int r = areq((struct sockaddr *) &addr, sizeof(addr), &HWaddr);
+
+    if (r <= 0) {
+        printf("AREQ timeout or error!\n");
+        return -1;
+    }
 
     printf("ifindex: %d hatype: %d halen:%d\n", HWaddr.sll_ifindex, HWaddr.sll_hatype, HWaddr.sll_halen);
     int i;
