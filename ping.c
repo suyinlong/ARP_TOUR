@@ -17,8 +17,6 @@
 #define ICMP_DATALEN        (sizeof(struct timeval))
 #define ICMP_FRAME_LEN      (ETHHDR_LEN + IP4_HDRLEN + ICMP_HDRLEN + ICMP_DATALEN)
 
-int g_icmpSeq = 0;
-
 // Computing the internet checksum (RFC 1071).
 // Note that the internet checksum does not preclude collisions.
 uint16_t CheckSum(uint16_t *addr, int len)
@@ -112,7 +110,7 @@ int GetLocalMacAddr(int fd, struct hwaddr *hw)
     // Use ioctl() to look up interface name and get its MAC address.
     memset(&ifr, 0, sizeof(ifr));
     snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", interface);
-    if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0) 
+    if (ioctl(fd, SIOCGIFHWADDR, &ifr) < 0)
     {
         perror("ioctl() failed to get source MAC address ");
         return -1;
@@ -121,12 +119,12 @@ int GetLocalMacAddr(int fd, struct hwaddr *hw)
     // Copy source MAC address.
     memcpy(hw->sll_addr, ifr.ifr_hwaddr.sa_data, 6);
 
-    if ((hw->sll_ifindex = if_nametoindex(interface)) == 0) 
+    if ((hw->sll_ifindex = if_nametoindex(interface)) == 0)
     {
         perror("if_nametoindex() failed to obtain interface index ");
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -141,7 +139,7 @@ void BuildEthHdr(uchar *eth, const uchar *srcMac, const uchar *dstMac, ushort pr
 }
 
 // build ip header
-void BuildIpHdr(struct ip *iphdr, const uchar *src, const uchar *dst) 
+void BuildIpHdr(struct ip *iphdr, const uchar *src, const uchar *dst)
 {
     memset(iphdr, 0, sizeof(*iphdr));
     int iplen = IPADDR_BUFFSIZE;
@@ -161,14 +159,14 @@ void BuildIpHdr(struct ip *iphdr, const uchar *src, const uchar *dst)
 }
 
 // build ICMP frame
-void BuildIcmpFrame(struct icmp *icmp)
+void BuildIcmpFrame(struct icmp *icmp, int seq)
 {
     pid_t pid = getpid() & 0xffff;
     memset(icmp, 0, sizeof(*icmp));
     icmp->icmp_type = ICMP_ECHO;
     icmp->icmp_code = 0;
     icmp->icmp_id = pid;
-    icmp->icmp_seq = htons(g_icmpSeq++);
+    icmp->icmp_seq = htons(seq);
     memset(icmp->icmp_data, 0, ICMP_DATALEN);
     //strcpy(icmp->icmp_data, "hello");
     Gettimeofday((struct timeval *)icmp->icmp_data, NULL);
@@ -196,41 +194,40 @@ int SendIcmpFrame(int sockfd, int if_index, const uchar *src, void *frame, int f
 }
 
 // Send ICMP echo request
-int SendIcmpRequestMsg(tour_object *obj, const uchar *dstIpAddr, const uchar *dstMacAddr)
+int SendIcmpRequestMsg(tour_object *obj, const uchar *dstIpAddr, const uchar *dstMacAddr, int seq)
 {
-    int seq = 0;
     uchar frame[ICMP_FRAME_LEN] = { 0 };
 
     // get local mac address
-    struct hwaddr hwAddr;    
+    struct hwaddr hwAddr;
     GetLocalMacAddr(obj->pfSockfd, &hwAddr);
-    
+
     // build eth header
-    BuildEthHdr(frame, hwAddr.sll_addr, dstMacAddr, ETH_P_IP);    
-    
+    BuildEthHdr(frame, hwAddr.sll_addr, dstMacAddr, ETH_P_IP);
+
     // build ip header
     struct ip *ipHdr = (struct ip *)(frame + ETHHDR_LEN);
     BuildIpHdr(ipHdr, obj->ipaddr, dstIpAddr);
-    
+
     // build ICMP frame
     struct icmp *icmpHdr = (struct icmp *)(frame + ETHHDR_LEN + IP4_HDRLEN);
-    BuildIcmpFrame(icmpHdr);
-    
+    BuildIcmpFrame(icmpHdr, seq);
+
     int n = SendIcmpFrame(obj->pfSockfd, hwAddr.sll_ifindex, dstMacAddr, frame, ICMP_FRAME_LEN);
     if (n < 0)
     {
         printf("[PING] Send frame error(%d) %s\n", errno, strerror(errno));
         return -1;
     }
-    
+
     /*
     struct in_addr dstIn;
     memcpy(&dstIn, dstIpAddr, IPADDR_BUFFSIZE);
     char *ip = inet_ntoa(dstIn);
     char mac[32] = { 0 };
-    sprintf(mac, "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x", 
+    sprintf(mac, "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x",
         dstMacAddr[0], dstMacAddr[1], dstMacAddr[2], dstMacAddr[3], dstMacAddr[4], dstMacAddr[5]);
-    printf("[PING] Send ICMP request to vm node ok, ip=%s mac=%s interface=%d bytes=%d\n", 
+    printf("[PING] Send ICMP request to vm node ok, ip=%s mac=%s interface=%d bytes=%d\n",
         ip, mac, hwAddr.sll_ifindex, n);
     */
 
@@ -255,7 +252,7 @@ int RecvIcmpReplyMsg(tour_object *obj)
     struct ip *iphdr = (struct ip *)p;
     if (iphdr->ip_p != IPPROTO_ICMP)
         return -2;  // not ICMP
-    
+
     // get icmp frame
     p += IP4_HDRLEN;
     struct icmp *icmp = (struct icmp *)p;
@@ -263,12 +260,12 @@ int RecvIcmpReplyMsg(tour_object *obj)
     if (icmpLen < 8)
         return -3;  // malformed packet
 
-    if (icmp->icmp_type == ICMP_ECHOREPLY) 
+    if (icmp->icmp_type == ICMP_ECHOREPLY)
     {
         pid_t pid = getpid() & 0xffff;
         if (icmp->icmp_id != pid)
             return -4;  // not a response to our ECHO_REQUEST
-        
+
         if (icmpLen < 16)
             return -5;  // not enough data to use
 
@@ -281,9 +278,13 @@ int RecvIcmpReplyMsg(tour_object *obj)
 
         printf("[PING] %d bytes from %s: seq=%u, ttl=%d, rtt=%.3f ms\n",
             icmpLen, fromIp, ntohs(icmp->icmp_seq), iphdr->ip_ttl, rtt);
+        return 0;
+    }
+    else {
+        // If receive REQ, need to discard and recv again!
+        return RecvIcmpReplyMsg(obj);
     }
 
-    return 0;
 }
 
 // Send work thread
@@ -293,33 +294,41 @@ void *SendThread(void *arg)
     tour_object obj;
     uchar dstIpAddr[IPADDR_BUFFSIZE] = { 0 };
     uchar dstMacAddr[8] = { 0 };
-    
+
     memcpy(&obj, p, sizeof(obj));
     p += sizeof(obj);
     memcpy(dstIpAddr, p, IPADDR_BUFFSIZE);
     p += IPADDR_BUFFSIZE;
     memcpy(dstMacAddr, p, 6);
-    
+
     char ip[INET_ADDRSTRLEN] = { 0 };
     inet_ntop(AF_INET, dstIpAddr, ip, INET_ADDRSTRLEN);
     int dataLen = ICMP_FRAME_LEN;
-    printf("[PING] %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x): %d data bytes\n", 
+    printf("[PING] %s (%.2x:%.2x:%.2x:%.2x:%.2x:%.2x): %d data bytes\n",
         ip, dstMacAddr[0], dstMacAddr[1], dstMacAddr[2], dstMacAddr[3], dstMacAddr[4], dstMacAddr[5], dataLen);
-
+    int ret, count = 0;
     while (1)
     {
+        if (count >= 4)
+            break;
         // send a icmp echo request
-        if (SendIcmpRequestMsg(&obj, dstIpAddr, dstMacAddr) < 0)
+        if (SendIcmpRequestMsg(&obj, dstIpAddr, dstMacAddr, count) < 0)
         {
             printf("[PING] Send ICMP echo request error: %s\n", strerror(errno));
             break;
         }
-            
-
+        count++;
+        // receive the icmp echo reply
+        ret = RecvIcmpReplyMsg(&obj);
+        if (ret == -1)
+        {
+            printf("[PING] Receive ICMP echo reply error: %s\n", strerror(errno));
+            break;
+        }
         sleep(1);
     }
 
-    free(p);
+    free(arg);
 }
 
 // Create a sending thread
@@ -345,7 +354,7 @@ void Ping(tour_object *obj, const struct sockaddr_in *dstIp, const struct hwaddr
 {
     uchar dstIpAddr[IPADDR_BUFFSIZE] = { 0 };
     memcpy(dstIpAddr, &dstIp->sin_addr, IPADDR_BUFFSIZE);
-    
+
     int len = sizeof(*obj) + IPADDR_BUFFSIZE + 6;
     char *context = (char *)malloc(len);
     char *p = context;
@@ -358,17 +367,7 @@ void Ping(tour_object *obj, const struct sockaddr_in *dstIp, const struct hwaddr
     // create a thread for sending ICMP echo
     CreateSendThread(context, SendThread);
 
-    int ret = 0;
-    while (1)
-    {
-        // receive the icmp echo reply
-        ret = RecvIcmpReplyMsg(obj);
-        if (ret == -1)
-        {
-            printf("[PING] Receive ICMP echo reply error: %s\n", strerror(errno));
-            break;
-        }   
-    }
+
 }
 
 

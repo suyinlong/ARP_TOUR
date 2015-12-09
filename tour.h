@@ -27,6 +27,7 @@
 #define TIMESTR_BUFFSIZE    60
 #define PACKET_BUFFSIZE     1024
 #define MCAST_BUFFSIZE      100
+#define PING_BUFFSIZE       10
 
 #define IP4_HDRLEN          20  // IPv4 header length
 #define TOUR_HDRLEN         8   // TOUR header length, excludes data
@@ -39,6 +40,13 @@ typedef unsigned char   uchar;
 typedef unsigned short  ushort;
 typedef unsigned int    uint;
 typedef unsigned long   ulong;
+
+struct hwaddr {
+    int     sll_ifindex;    /* Interface number         */
+    ushort  sll_hatype;     /* Hardware type            */
+    uchar   sll_halen;      /* Length of address        */
+    uchar   sll_addr[8];    /* Physical layer address   */
+};
 
 // TOUR IP packet payload
 typedef struct tourhdr_t {
@@ -65,12 +73,6 @@ typedef struct tour_object_t {
     int     mcastPort;                      /* Multicast port #     */
 } tour_object;
 
-struct hwaddr {
-    int     sll_ifindex;    /* Interface number         */
-    ushort  sll_hatype;     /* Hardware type            */
-    uchar   sll_halen;      /* Length of address        */
-    uchar   sll_addr[8];    /* Physical layer address   */
-};
 
 char *UtilIpToString(const uchar *);
 

@@ -1,7 +1,7 @@
 /*
 * @File:    multicast.c
 * @Date:    2015-11-25 19:29:30
-* @Last Modified time: 2015-12-03 11:26:03
+* @Last Modified time: 2015-12-08 23:23:17
 * @Description:
 *     Multicast function library
 *     + void CreateMulticastGroup(uchar *grp, int *port)
@@ -55,16 +55,7 @@ void CreateMulticastGroup(uchar *grp, int *port) {
  * --------------------------------------------------------------------------
  */
 void JoinMulticastGroup(tour_object *obj, uchar *grp, int port) {
-    struct sockaddr_in mcastaddr;
     struct ip_mreq mreq;
-
-    // bind UDP socket to multicast group address / port
-    bzero(&mcastaddr, sizeof(mcastaddr));
-    mcastaddr.sin_family = AF_INET;
-    memcpy(&mcastaddr.sin_addr, grp, IPADDR_BUFFSIZE);
-    mcastaddr.sin_port = htons(port);
-
-    Bind(obj->mrSockfd, (struct sockaddr *)&mcastaddr, sizeof(mcastaddr));
 
     // Join the multicast group
     memcpy(&mreq.imr_multiaddr, grp, IPADDR_BUFFSIZE);
@@ -75,7 +66,7 @@ void JoinMulticastGroup(tour_object *obj, uchar *grp, int port) {
     memcpy(obj->mcastAddr, grp, IPADDR_BUFFSIZE);
     obj->mcastPort = port;
 
-    printf("[TOU] Join multicast address: %d.%d.%d.%d:%d\n", grp[0], grp[1], grp[2], grp[3], port);
+    printf("[TOUR] Join multicast address: %d.%d.%d.%d:%d\n", grp[0], grp[1], grp[2], grp[3], port);
 }
 
 /* --------------------------------------------------------------------------
@@ -99,7 +90,7 @@ void LeaveMulticastGroup(tour_object *obj, uchar *grp, int port) {
 
     Setsockopt(obj->mrSockfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreq, sizeof(mreq));
 
-    printf("[TOU] Leave multicast address: %d.%d.%d.%d:%d\n",grp[0], grp[1], grp[2], grp[3], port);
+    printf("[TOUR] Leave multicast address: %d.%d.%d.%d:%d\n",grp[0], grp[1], grp[2], grp[3], port);
 
     bzero(obj->mcastAddr, IPADDR_BUFFSIZE);
     obj->mcastPort = 0;
@@ -126,7 +117,7 @@ void SendMulticast(tour_object *obj, char *msg) {
     memcpy(&mcastaddr.sin_addr, obj->mcastAddr, IPADDR_BUFFSIZE);
     mcastaddr.sin_port = htons(obj->mcastPort);
 
-    printf("[TOU] Node %s. Sending : %s.\n", obj->hostname, msg);
+    printf("[TOUR] Node %s. Sending : %s.\n", obj->hostname, msg);
     Sendto(obj->msSockfd, msg, strlen(msg) + 1, 0, (struct sockaddr *)&mcastaddr, sizeof(mcastaddr));
 }
 
@@ -170,7 +161,7 @@ void ProcessMulticast(tour_object *obj) {
     int r;
     r = Recvfrom(obj->mrSockfd, msg, MCAST_BUFFSIZE, 0, NULL, NULL);
 
-    printf("[TOU] Node %s. Received: %s.\n", obj->hostname, msg);
+    printf("[TOUR] Node %s. Received: %s.\n", obj->hostname, msg);
 
 
     // identify request, send out multicast message
@@ -190,7 +181,10 @@ void ProcessMulticast(tour_object *obj) {
         // use select to receive multicast messages
         while (1) {
             FD_SET(obj->mrSockfd, &rset);
-            r = Select(obj->mrSockfd + 1, &rset, NULL, NULL, &timeout);
+            r = select(obj->mrSockfd + 1, &rset, NULL, NULL, &timeout);
+            if (r == -1 && errno == EINTR)
+                continue;
+
             if (r == 0) {
                 // timeout, exit mcast and tour process
                 FinishTour(obj);

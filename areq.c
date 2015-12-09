@@ -1,7 +1,7 @@
 /*
 * @File:    areq.c
 * @Date:    2015-12-02 23:29:25
-* @Last Modified time: 2015-12-03 11:02:36
+* @Last Modified time: 2015-12-08 22:50:54
 * @Description:
 *     ARP API function
 *     + int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr)
@@ -48,7 +48,7 @@ int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) 
     Bind(sockfd, (SA *)&areqaddr, sizeof(areqaddr));
     Connect(sockfd, (SA *)&arpaddr, sizeof(arpaddr));
 
-    printf("[API] AREQ \"%s\" to local ARP service...\n", UtilIpToString(ipaddr));
+    printf("[AREQ] AREQ \"%s\" to local ARP service...\n", UtilIpToString(ipaddr));
     // Write the IP address to ARP service
     Write(sockfd, ipaddr, IP_ALEN);
 
@@ -65,46 +65,14 @@ int areq(struct sockaddr *IPaddr, socklen_t sockaddrlen, struct hwaddr *HWaddr) 
 
     // error or timeout, return -1
     if (r <= 0) {
-        printf("[API] AREQ timeout.\n");
+        printf("[AREQ] AREQ timeout.\n");
         return -1;
     }
 
     r = Read(sockfd, HWaddr, sizeof(struct hwaddr));
 
-    printf("[API] AREQ \"%s\" received: ", UtilIpToString(ipaddr));
+    printf("[AREQ] AREQ \"%s\" received: ", UtilIpToString(ipaddr));
     printf("<%d, %d, %d, ", HWaddr->sll_ifindex, HWaddr->sll_hatype, HWaddr->sll_halen);
     for (i = 0; i < 6; i++)
         printf("%.2x%s", HWaddr->sll_addr[i], (i < 5) ? ":" : ">\n");
 }
-
-/*
-
-// temp test main(), will be deletetd
-
-int main(int argc, char **argv) {
-    struct sockaddr_in addr;
-    bzero(&addr, sizeof(addr));
-    addr.sin_family = AF_INET;
-    uchar *ipaddr = ((uchar *)&addr) + 4;
-    ipaddr[0] = 130;
-    ipaddr[1] = 245;
-    ipaddr[2] = 156;
-    ipaddr[3] = 21;
-
-    struct hwaddr HWaddr;
-
-    int r = areq((struct sockaddr *) &addr, sizeof(addr), &HWaddr);
-
-    if (r <= 0) {
-        printf("AREQ timeout or error!\n");
-        return -1;
-    }
-
-    printf("ifindex: %d hatype: %d halen:%d\n", HWaddr.sll_ifindex, HWaddr.sll_hatype, HWaddr.sll_halen);
-    int i;
-    for (i = 0; i < HWaddr.sll_halen; i++)
-        printf("%.2x%s", HWaddr.sll_addr[i], (i < HWaddr.sll_halen-1) ? ":" : "\n");
-
-    return 0;
-}
-*/

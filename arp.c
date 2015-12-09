@@ -1,7 +1,7 @@
 /*
 * @File:    arp.c
 * @Date:    2015-11-30 16:53:29
-* @Last Modified time: 2015-12-03 10:07:29
+* @Last Modified time: 2015-12-08 22:52:39
 * @Description:
 *     ARP service functions
 *     - void PrintAddressPairs(arp_object *obj)
@@ -54,7 +54,7 @@ void PrintAddressPairs(arp_object *obj) {
     int i;
 
     while (hwa) {
-        printf("[ARP] Address pair found: <%s, ", UtilIpToString(hwa->ip_addr));
+        printf(" [ARP] Address pair found: <%s, ", UtilIpToString(hwa->ip_addr));
         for (i = 0; i < 6; i++)
             printf("%.2x%s", hwa->if_haddr[i] & 0xff, (i < 5) ? ":" : ">");
         printf(" @ interface %d\n", hwa->if_index);
@@ -167,7 +167,7 @@ struct hwa_info *GetHwaEntry(arp_object *obj, const uchar *ipaddr) {
 arp_cache *InsertOrUpdateCacheEntry(arp_object *obj, arp_cache *entry, arppayload *data, struct sockaddr_ll *from) {
     int i;
 
-    printf("[ARP] Cache ");
+    printf(" [ARP] Cache ");
     if (entry == NULL) {
         // insert a new entry, calloc memory space
         entry = Calloc(1, sizeof(arp_cache));
@@ -217,7 +217,7 @@ void ReplyAREQ(arp_cache *entry) {
     memcpy(HWaddr.sll_addr, entry->hwaddr, ETH_ALEN);
 
     // print out information
-    printf("[ARP] Reply to AREQ <%s, ", UtilIpToString(entry->ipaddr));
+    printf(" [ARP] Reply to AREQ <%s, ", UtilIpToString(entry->ipaddr));
     for (i = 0; i < 6; i++)
         printf("%.2x%s", HWaddr.sll_addr[i], (i < 5) ? ":" : ">\n");
 
@@ -261,7 +261,7 @@ void SendREQ(arp_object *obj, uchar *ipaddr) {
     memcpy(data->ar_spro, obj->hwa_info->ip_addr, IP_ALEN);
     memcpy(data->ar_tpro, ipaddr, IP_ALEN);
     // print out frame information then send the frame
-    printf("[ARP] Sending ARP REQ via interface %d <broadcast>\n", obj->hwa_info->if_index);
+    printf(" [ARP] Sending ARP REQ via interface %d <broadcast>\n", obj->hwa_info->if_index);
     PrintARPFrame(frame);
     SendFrame(obj->pfSockfd, obj->hwa_info->if_index, frame, ARP_FRAME_LEN, PACKET_BROADCAST);
 }
@@ -303,7 +303,7 @@ void SendREP(arp_object *obj, arp_cache *entry, struct hwa_info *localhwa) {
     memcpy(data->ar_thrd, entry->hwaddr, ETH_ALEN);
     memcpy(data->ar_tpro, entry->ipaddr, IP_ALEN);
     // print out frame information then send the frame
-    printf("[ARP] Sending out ARP REP via interface %d <unicast>\n", localhwa->if_index);
+    printf(" [ARP] Sending out ARP REP via interface %d <unicast>\n", localhwa->if_index);
     PrintARPFrame(frame);
     SendFrame(obj->pfSockfd, localhwa->if_index, frame, ARP_FRAME_LEN, PACKET_OTHERHOST);
 }
@@ -337,7 +337,7 @@ void ProcessREQ(arp_object *obj, char *frame, struct sockaddr_ll *from) {
 
     if (localhwa != NULL || entry != NULL) {
         // print received frame and insert/update the cache entry
-        printf("[ARP] Received ARP REQ from interface %d\n", from->sll_ifindex);
+        printf(" [ARP] Received ARP REQ from interface %d\n", from->sll_ifindex);
         PrintARPFrame(frame);
         entry = InsertOrUpdateCacheEntry(obj, entry, data, from);
     }
@@ -374,7 +374,7 @@ void ProcessREP(arp_object *obj, char *frame, struct sockaddr_ll *from) {
     struct hwa_info *localhwa = GetHwaEntry(obj, data->ar_tpro);
 
     if (entry && localhwa) {
-        printf("[ARP] Received ARP REP from interface %d\n", from->sll_ifindex);
+        printf(" [ARP] Received ARP REP from interface %d\n", from->sll_ifindex);
         PrintARPFrame(frame);
         entry = InsertOrUpdateCacheEntry(obj, entry, data, from);
         // reply AREQ
@@ -410,7 +410,7 @@ void ProcessFrame(arp_object *obj) {
     arppayload *data = (arppayload *)(frame + ETHHDR_LEN + ARPHDR_LEN);
 
     if (len < 0) {
-        printf("[ARP] Frame error.\n");
+        printf(" [ARP] Frame error.\n");
         return;
     }
 
@@ -423,7 +423,7 @@ void ProcessFrame(arp_object *obj) {
     else if (arp->ar_op == htons(ARP_REP))
         ProcessREP(obj, frame, &from);
     else
-        printf("[ARP] Receive undefined ARP frame.\n");
+        printf(" [ARP] Receive undefined ARP frame.\n");
 }
 
 /* --------------------------------------------------------------------------
@@ -449,17 +449,17 @@ void ProcessDomainStream(arp_object *obj) {
     // accept and read the socket
     connSockfd = Accept(obj->doSockfd, (struct sockaddr *) &from, &addrlen);
     Read(connSockfd, ipaddr, IP_ALEN);
-    printf("[ARP] Domain socket: Incoming AREQ <%s> from %s\n", UtilIpToString(ipaddr), from.sun_path);
+    printf(" [ARP] Domain socket: Incoming AREQ <%s> from %s\n", UtilIpToString(ipaddr), from.sun_path);
     // try to find entry in cache
     entry = GetCacheEntry(obj, ipaddr);
     if (entry) {
         // found, send reply immediately
-        printf("[ARP] AREQ <%s> found in cache, reply immediately.\n", UtilIpToString(ipaddr));
+        printf(" [ARP] AREQ <%s> found in cache, reply immediately.\n", UtilIpToString(ipaddr));
         entry->sockfd = connSockfd;
         ReplyAREQ(entry);
     } else {
         // not found, create the incomplete entry
-        printf("[ARP] AREQ <%s> not found in cache, create an incomplete entry.\n", UtilIpToString(ipaddr));
+        printf(" [ARP] AREQ <%s> not found in cache, create an incomplete entry.\n", UtilIpToString(ipaddr));
         entry = Calloc(1, sizeof(arp_cache));
         memcpy(entry->ipaddr, ipaddr, IP_ALEN);
         entry->ifindex = obj->hwa_info->if_index;
@@ -562,7 +562,7 @@ checkagain:
                     free(entry);
                 }
                 // print out the information and check again
-                printf("[ARP] Socket connection terminated. Incomplete entry has been removed.\n");
+                printf(" [ARP] Socket connection terminated. Incomplete entry has been removed.\n");
                 goto checkagain;
             }
             prev = entry;
@@ -591,7 +591,7 @@ int main(int argc, char **argv) {
     obj.hwa_info = Get_hw_addrs();
     obj.if_index = obj.hwa_info->if_index;
 
-    printf("[ARP] Module started.\n");
+    printf(" [ARP] Module started.\n");
     PrintAddressPairs(&obj);
     CreateSockets(&obj);
     ProcessSockets(&obj);
