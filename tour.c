@@ -23,7 +23,7 @@
 */
 
 #include "tour.h"
-
+#include "ping.h"
 
 /* --------------------------------------------------------------------------
  *  IsVisitedPrecedingNode
@@ -170,8 +170,9 @@ void ProcessTour(tour_object *obj) {
 
             bzero(&HWaddr, sizeof(struct hwaddr));
             areq((struct sockaddr *) &preceding, sizeof(preceding), &HWaddr);
+            
             // TODO: PING
-
+            Ping(obj, &preceding, &HWaddr);
         } else {
             printf("[TOU] Preceding node has been pinged before.\n");
         }

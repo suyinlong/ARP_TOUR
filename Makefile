@@ -3,7 +3,7 @@ CC = gcc
 USR = $(shell logname)
 UNP_DIR = /users/cse533/Stevens/unpv13e
 
-LIBS = ${UNP_DIR}/libunp.a
+LIBS = -lpthread ${UNP_DIR}/libunp.a
 
 FLAGS = -g -O2
 
@@ -26,8 +26,11 @@ multicast.o: multicast.c
 get_hw_addrs.o : get_hw_addrs.c
 	${CC} ${CFLAGS} -c get_hw_addrs.c
 
-tour_${USR}: tour.o utils.o ip.o multicast.o areq.o
-	${CC} ${CFLAGS} -o tour_${USR} tour.o utils.o ip.o multicast.o areq.o ${LIBS}
+ping.o: ping.c
+	${CC} ${CFLAGS} -c ping.c
+
+tour_${USR}: tour.o utils.o ip.o multicast.o areq.o ping.o
+	${CC} ${CFLAGS} -o tour_${USR} tour.o utils.o ip.o multicast.o areq.o ping.o ${LIBS}
 
 tour.o: tour.c
 	${CC} ${CFLAGS} -c tour.c
