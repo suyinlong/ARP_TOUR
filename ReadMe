@@ -1,0 +1,240 @@
+AUTHORS INFORMATION
+==================
+
+Author 1    :   Yinlong Su
+Student ID  :   110461173
+Email       :   yinlsu@cs.stonybrook.edu
+
+Author 2    :   Jiewen Zheng
+Student ID  :   110614508
+Email       :   jiezheng@cs.stonybrook.edu
+
+
+COMPILE AND RUN
+===============
+
+Make sure the library is in right location:
+
+    libunp.a    /users/cse533/Stevens/unpv13e/libunp.a
+
+Execute the following from the source directory to compile the source code:
+
+    make                        # use "make" to compile the source
+
+Run the programs:
+
+    ./arp_yinlsu                # run the ARP service
+
+    ./tour_yinlsu <tour seq>    # run the TOUR application
+                                  with tour sequence (optional)
+
+
+SYSTEM DOCUMENTATION
+====================
+
+This program is a tour traversal application combined with ARP service and ping
+program.
+
+1.  TOUR application : tour & multicast (tour.c multicast.c ip.c)
+
+    a.  Arguments
+        TOUR application can receive the tour node sequence as command line
+        arguments. Only the start node in the tour will be assign a sequence.
+        In ParseArguments function, we check and correct the sequence.
+        First we add start node to the beginning of the sequence. Then we check
+        the sequence one by one, remove the same continuous nodes (just leave
+        one). If the final sequence length is 1 (point to the start node
+        itself), then tour will not be initialized.
+
+    b.  Sockets
+        TOUR application creates 5 sockets in total.
+        1. IP Raw socket (rtSockfd):    Used for tour packet
+            + Option: IP_HDRINCL=1, Protocol: TOUR_PROTOCOL_ID
+        2. IP Raw socket (pgSockfd):    Used for receiving PING packet
+            + Protocol: IPPROTO_ICMP
+        3. PF_PACKET     (pfSockfd):    Used for sending PING packet
+            + Protocol: ETH_P_IP
+        4. UDP socket    (msSockfd):    Used for sending multicast datagram
+            + Option: SO_REUSEADDR=1, IP_MULTICAST_TTL=1
+        5. UDP socket    (mrSockfd):    used for receiving multicast datagram
+            + Option: SO_REUSEADDR=1
+
+        The reason we create two sockets for multicast is that RFC 1122 forbids
+        an IP datagram from having a source IP address that is a multicast
+        address or a broadcast address. We wants to abide by the rule.
+        In the main module of TOUR application, we only focus on the messages
+        received by rtSockfd and mrSockfd. pgSockfd and pfSockfd will be
+        handled in ping module and msSockfd is purely for sending.
+
+    c.  Tour segment
+        We have our own tour segment format. It includes the multicast group
+        address and port number, tour sequence length, current index and the
+        sequence.
+
+        typedef struct tourhdr_t {
+            uchar   grp[4];     /* Multicast group address  */
+            ushort  port;       /* Multicast port number    */
+            uchar   seqLength;  /* Tour sequence length     */
+            uchar   index;      /* Current node index       */
+          //uchar   seq[seqLength*4]; This is payload
+        } tourhdr;
+
+        When a node receives tour segment, the index will point to the node that
+        represents itself.
+
+    d.  Tour process
+        1.  Start the tour
+            When TOUR application receives a valid tour sequence, it initial
+            the tour. It will create multicast group and write the data to tour
+            segment. The index in tour segment will point to the next node in
+            the sequence. After the building of tour header, ip header, the
+            packet will be sent to next node.
+        2.  Process the tour
+            All the nodes except the first one who receive the tour segment
+            will check the segment.
+            First, ignore the segment that does not belong to our application.
+            Second, join the multicast group if it is first visit.
+            Third, modify the index and send the segment to next node.
+            And also, if the preceding node is not visited by the current node,
+            call areq to query the MAC address of preceding node then ping it.
+        3.  Multicast
+            If the tour segment reaches the last node of the sequence, it will
+            wait for the ping (5 seconds) then start multicast.
+            The last node will multicast a message that requires all nodes in
+            the group to identify itself. And all nodes (including the last
+            one) receive this message will go into ProcessMulticast function,
+            which is only focus on mrSockfd. Nodes will send a multicast
+            message to identify itself on msSockfd then try to receive messages
+            from mrSockfd. If there is no new message from the socket for five
+            seconds, mutlicast phase will end.
+        4.  Finish the tour
+            After multicast, the tour has ended. All nodes on the tour will
+            clear the multicast infomation and leave the multicast group.
+
+
+2.  TOUR application: ping (ping.c)
+
+
+
+3.  ARP service (arp.c frame.c)
+
+    a.  Address pairs
+        We use modified get_hw_addrs to only get the information of interface
+        'eth0'. All the IP addresses (including alias addresses) it found will
+        be store in struct hwa_info. Then we will print out all address pairs.
+
+    b.  ARP sockets
+        ARP service creates two sockets. One is PF_PACKET socket with our own
+        ARP protocol ID. This socket is used for sending and receiving ARP
+        frame. The other one is Unix domain stream socket, we bind it to a
+        well-known pathname defined in arp.h. This socket is used for listening
+        to the incoming ARP request from the API between ARP service and TOUR
+        application.
+
+    c.  ARP cache
+        ARP service has cache structure. When a ARP request from API need to
+        query an IP address that is looked up before (has an entry in cache),
+        ARP service can reply immediately.
+
+        typedef struct arp_cache_t {
+            uchar   ipaddr[IP_ALEN];    /* IP address       */
+            uchar   hwaddr[ETH_ALEN];   /* Hardware address */
+            int     ifindex;            /* Interface number */
+            ushort  hatype;             /* Hardware type    */
+            int     sockfd;             /* Connected client */
+            struct arp_cache_t *next;   /* next pointer     */
+        } arp_cache;
+
+        For a complete and finished entry, all data fields are filled except
+        the sockfd=0. A non-zero sockfd indicates that this entry is incomplete
+        and the API is waiting for the reply from the service.
+
+    d.  ARP frame
+        ARP frame is an ethernet frame that encapsulates an ARP packet. The
+        frame header has our own ARP protocol ID.
+
+        typedef struct ethhdr_t {
+            uchar   h_dest[ETH_ALEN];       /* destination eth addr */
+            uchar   h_source[ETH_ALEN];     /* source ether addr    */
+            ushort  h_proto;                /* packet type ID field */
+        }__attribute__((packed)) ethhdr;
+
+        Our own ARP packet header is different from the normal ARP packet.
+        We add an extra ID field at the beginning of the header.
+
+        typedef struct arphdr_t {
+            ushort  ar_id;          /* our own ARP identification # */
+            ushort  ar_hrd;         /* format of hardware address   */
+            ushort  ar_pro;         /* format of protocol address   */
+            uchar   ar_hln;         /* length of hardware address   */
+            uchar   ar_pln;         /* length of protocol address   */
+            ushort  ar_op;          /* ARP opcode (command)         */
+        }__attribute__((packed)) arphdr;
+
+        ar_op can be ARP_REQ or ARP_REP. In our ARP protocol, ar_hrd ar_pro
+        ar_hln ar_pln are all fixed number, which are ETH_P_802_3 ETH_P_IP
+        6 4 respectively. Thus the payload length of ARP packet is also fixed.
+
+        typedef struct arppayload_t {
+            uchar   ar_shrd[ETH_ALEN];  /* sender hardware address */
+            uchar   ar_spro[IP_ALEN];   /* sender protocol address */
+            uchar   ar_thrd[ETH_ALEN];  /* target hardware address */
+            uchar   ar_tpro[IP_ALEN];   /* target protocol address */
+        } arppayload;
+
+        Here ETH_ALEN is 6 and IP_ALEN is 4.
+
+    e.  ARP request and reply
+        ARP request comes from the API function areq. When ARP service receives
+        a query from domain socket, ARP service will accept the connection and
+        try to find an entry in the cache. If the matching entry is found, ARP
+        service will reply immediately and close the connection.
+        If there is no matching entry, ARP service creates an incomplete cache
+        entry filled with IP address, interface index, hatype, and connected
+        socket file descriptor. Then ARP service will send out an ARP REQ frame
+        via broadcast on PF_PACKET socket.
+        Whoever receives the ARP REQ frame will check its own cache. If there
+        is an entry belongs to the sender, the entry will be updated. If the
+        target node receive the frame, it will not only update (or insert) the
+        entry but also send back ARP REP frame to declare its MAC address via
+        unicast back to the sender.
+        The original sender receives the ARP REP frame checks its own cache.
+        If the entry is gone (meaning API close the connection when timed out),
+        this frame will be ignored. Otherwise, ARP service will reply to the
+        connected domain socket the MAC address it found out.
+
+    f.  Availability of connected domain sockets
+        ARP service will try to monitor all the sockets in the incomplete ARP
+        entries. If one is close, ARP service will remove the corresponding
+        incomplete entry and ignore following possible reply.
+
+
+4.  API (areq.c)
+
+    a.  API function
+        areq function is for communication between the TOUR application and ARP
+        service. It submits the query by providing the target IP address, and
+        the query result will be store in struct hwaddr. The function is
+        defined as:
+
+        int areq (  struct sockaddr *IPaddr,
+                    socklen_t sockaddrlen,
+                    struct hwaddr *HWaddr  );
+
+        And the structure hwaddr is defined as:
+
+        struct hwaddr {
+            int     sll_ifindex;    /* Interface number         */
+            ushort  sll_hatype;     /* Hardware type            */
+            uchar   sll_halen;      /* Length of address        */
+            uchar   sll_addr[8];    /* Physical layer address   */
+        };
+
+    b.  Communication socket and timeout
+        areq function will create a temporary domain stream socket to connect
+        to the well-known pathname of ARP service. Once the connection is
+        established, areq writes the IP address to the socket and wait for the
+        reply. If there is no reply in 5 seconds, areq will close the socket
+        and return with -1.
+
+

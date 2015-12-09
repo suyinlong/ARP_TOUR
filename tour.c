@@ -1,7 +1,7 @@
 /*
 * @File:    tour.c
 * @Date:    2015-11-25 16:33:23
-* @Last Modified time: 2015-12-09 10:08:29
+* @Last Modified time: 2015-12-09 11:41:40
 * @Description:
 *     Tour application basic functions
 *     - int IsVisitedPrecedingNode(tourhdr *rthdr, uchar *data)
@@ -291,7 +291,7 @@ void CreateSockets(tour_object *obj) {
     int port;
 
     // rtSocket: IP raw socket
-    //           used for sending tour packet
+    //           used for tour packet
     //   option: IP_HDRINCL
     obj->rtSockfd = Socket(AF_INET, SOCK_RAW, TOUR_PROTOCOL_ID);
     Setsockopt(obj->rtSockfd, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
@@ -303,7 +303,7 @@ void CreateSockets(tour_object *obj) {
     // msSocket: UDP socket
     //           used for sending multicast datagram
     //   option: SO_REUSEADDR
-    //   option: IP_TTL = 1
+    //   option: IP_MULTICAST_TTL = 1
     obj->msSockfd = Socket(AF_INET, SOCK_DGRAM, 0);
     Setsockopt(obj->msSockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
     Setsockopt(obj->msSockfd, IPPROTO_IP, IP_MULTICAST_TTL, &on, sizeof(on));
