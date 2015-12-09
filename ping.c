@@ -290,6 +290,9 @@ int RecvIcmpReplyMsg(tour_object *obj)
 // Send work thread
 void *SendThread(void *arg)
 {
+    pthread_t tid = pthread_self();
+    Pthread_detach(tid);
+
     char *p = (char *)arg;
     tour_object obj;
     uchar dstIpAddr[IPADDR_BUFFSIZE] = { 0 };
