@@ -242,7 +242,8 @@ int RecvIcmpReplyMsg(tour_object *obj)
     int fromLen = sizeof(fromAddr);
     int n = Recvfrom(obj->pgSockfd, buffer, PACKET_BUFFSIZE, 0, (struct sockaddr *)&fromAddr, &fromLen);
     if (n == 0)
-        return -1;
+        //return -1;
+        return RecvIcmpReplyMsg(obj);
 
     // get peer ip address
     char *fromIp = inet_ntoa(fromAddr.sin_addr);
@@ -251,23 +252,27 @@ int RecvIcmpReplyMsg(tour_object *obj)
     // get ip frame
     struct ip *iphdr = (struct ip *)p;
     if (iphdr->ip_p != IPPROTO_ICMP)
-        return -2;  // not ICMP
+        //return -2;  // not ICMP
+        return RecvIcmpReplyMsg(obj);
 
     // get icmp frame
     p += IP4_HDRLEN;
     struct icmp *icmp = (struct icmp *)p;
     int icmpLen = n - IP4_HDRLEN;
     if (icmpLen < 8)
-        return -3;  // malformed packet
+        //return -3;  // malformed packet
+        return RecvIcmpReplyMsg(obj);
 
     if (icmp->icmp_type == ICMP_ECHOREPLY)
     {
         pid_t pid = getpid() & 0xffff;
         if (icmp->icmp_id != pid)
-            return -4;  // not a response to our ECHO_REQUEST
+            //return -4;  // not a response to our ECHO_REQUEST
+            return RecvIcmpReplyMsg(obj);
 
         if (icmpLen < 16)
-            return -5;  // not enough data to use
+            //return -5;  // not enough data to use
+            return RecvIcmpReplyMsg(obj);
 
         struct timeval	*tvsend = NULL;
         struct timeval tvrecv;
@@ -369,8 +374,6 @@ void Ping(tour_object *obj, const struct sockaddr_in *dstIp, const struct hwaddr
 
     // create a thread for sending ICMP echo
     CreateSendThread(context, SendThread);
-
-
 }
 
 

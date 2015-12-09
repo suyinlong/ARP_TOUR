@@ -1,7 +1,7 @@
 /*
 * @File:    tour.c
 * @Date:    2015-11-25 16:33:23
-* @Last Modified time: 2015-12-09 01:03:46
+* @Last Modified time: 2015-12-09 10:08:29
 * @Description:
 *     Tour application basic functions
 *     - int IsVisitedPrecedingNode(tourhdr *rthdr, uchar *data)
@@ -166,7 +166,7 @@ void ProcessTour(tour_object *obj) {
 
     // check if preceding node has been visited in the same order
     if (IsVisitedPrecedingNode(rthdr, data) == 0) {
-        printf("[TOUR] New preceding node.\n");
+        printf("[TOUR] New preceding node, call areq and ping.\n");
         bzero(&preceding, sizeof(struct sockaddr_in));
         sin.sin_family = AF_INET;
         memcpy((void *)&preceding.sin_addr, IP_SEQ(data, rthdr->index - 2), IPADDR_BUFFSIZE);
@@ -306,7 +306,7 @@ void CreateSockets(tour_object *obj) {
     //   option: IP_TTL = 1
     obj->msSockfd = Socket(AF_INET, SOCK_DGRAM, 0);
     Setsockopt(obj->msSockfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-    Setsockopt(obj->msSockfd, IPPROTO_IP, IP_TTL, &on, sizeof(on));
+    Setsockopt(obj->msSockfd, IPPROTO_IP, IP_MULTICAST_TTL, &on, sizeof(on));
 
     // mrSocket: UDP socket
     //           used for receiving multicast datagram
