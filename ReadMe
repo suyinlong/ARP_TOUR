@@ -114,6 +114,21 @@ program.
 
 2.  TOUR application: ping (ping.c)
 
+    a.  Build data frame
+        Use BuildEthHdr(), BuildIpHdr() and BuildIcmpFrame() function to build
+        eth header, ip header and icmp header respectively. When build eth 
+        header, set eth type to ETH_P_IP(0x800). When build ip header, set ip 
+        header protocol to IPPROTO_ICMP(1). When build icmp header, set icmp 
+        type to ICMP_ECHO and use current process pid as the icmp id.
+        
+    b.  Send ICMP echo request
+        Use SendIcmpFrame() function to send a packeted frame via PF_PACKET
+        socket.
+    
+    c.  Receive ICMP echo reply
+        Use RecvIcmpReplyMsg() function to receive ICMP echo reply, if ICMP
+        type is ICMP_ECHOREPLY, and ICMP id is current process pid, then 
+        print out the ping message.
 
 
 3.  ARP service (arp.c frame.c)
